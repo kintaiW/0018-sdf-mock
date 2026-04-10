@@ -1,0 +1,38 @@
+# GM/T 0018 Mock SDK 密钥配置文件
+# 所有密钥值为十六进制字符串（无空格、无0x前缀）
+
+[device]
+manufacturer = "MockDevice"
+device_name = "SDF_MOCK_V1"
+device_serial = "MOCK20250101"
+firmware_version = "1.0.0"
+
+# 设备根密钥（SM4 128位，16字节 = 32个十六进制字符）
+[root_key]
+value = "0123456789ABCDEF0123456789ABCDEF"
+
+# KEK（密钥加密密钥）列表，索引从 1 开始
+[[kek_keys]]
+index = 1
+algorithm = "SM4"
+value = "FEDCBA9876543210FEDCBA9876543210"
+
+[[kek_keys]]
+index = 2
+algorithm = "SM4"
+value = "0011223344556677889900AABBCCDDEE"
+
+# SM2 签名密钥对列表，索引从 1 开始
+# 注意：以下为示例密钥，生产环境请替换为合规密钥
+[[sign_keys]]
+index = 1
+# 私钥：32字节（64个十六进制字符）
+private_key = "3945208F7B2144B13F36E38AC6D39F95889393692860B51A42FB81EF4DF7C5B8"
+# 公钥：65字节（04 || x || y，130个十六进制字符）
+public_key = "04BB34D0B28F49ABAFAD1AEE5E44B489B730B8B2A2CB6CC068C8B9DABE7C1F0D0809DBAAD5D932A64D5FF9C5C4B5E3B2CE1DB05E3F7B2F16EAEF87AAA6E9B07C0A"
+
+# SM2 加密密钥对列表，索引从 1 开始
+[[enc_keys]]
+index = 1
+private_key = "56B96C94AF649D75F1738B4A2A0E563D39B1D488E3B9C42D2E7E7C6E5CF2D3B7"
+public_key = "04C0D5E3A2B1F49876543210FEDCBA9876543210FEDCBA9876543210FEDCBA98760102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F20"

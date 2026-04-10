@@ -1,15 +1,7 @@
 // SM4 算法封装
-// 封装 gm-sdk-rs 的 SM4 多种模式，适配 GM/T 0018 SDF 接口
+// 封装 libsmx 的 SM4 多种模式，适配 GM/T 0018 SDF 接口
 
-use gm_sdk::sm4::{
-    sm4_encrypt_ecb, sm4_decrypt_ecb,
-    sm4_encrypt_cbc, sm4_decrypt_cbc,
-    sm4_encrypt_cfb, sm4_decrypt_cfb,
-    sm4_encrypt_ofb, sm4_decrypt_ofb,
-    sm4_encrypt_ctr, sm4_decrypt_ctr,
-    sm4_encrypt_gcm, sm4_decrypt_gcm,
-    sm4_encrypt_ccm, sm4_decrypt_ccm,
-};
+use libsmx::sm4;
 use crate::types::alg_id;
 
 /// SM4 加密（根据算法标识分发）
@@ -19,18 +11,18 @@ use crate::types::alg_id;
 /// data: 明文（ECB/CBC 需16字节对齐，无填充模式）
 pub fn sm4_encrypt(key: &[u8; 16], iv: &[u8; 16], alg: u32, data: &[u8]) -> Result<Vec<u8>, String> {
     match alg {
-        alg_id::SGD_SM4_ECB => Ok(sm4_encrypt_ecb(key, data)),
+        alg_id::SGD_SM4_ECB => Ok(sm4::sm4_encrypt_ecb(key, data)),
         alg_id::SGD_SM4_CBC => {
             if data.len() % 16 != 0 {
                 return Err(format!("CBC 模式数据长度必须为16的倍数，实际{}字节", data.len()));
             }
-            let mut out = vec![0u8; data.len()];
-            sm4_encrypt_cbc(key, iv, data, &mut out);
-            Ok(out)
+            // Reason: libsmx sm4_encrypt_cbc 直接返回 Vec，无需传入输出缓冲区
+            Ok(sm4::sm4_encrypt_cbc(key, iv, data))
         }
-        alg_id::SGD_SM4_CFB => Ok(sm4_encrypt_cfb(key, iv, data)),
-        alg_id::SGD_SM4_OFB => Ok(sm4_encrypt_ofb(key, iv, data)),
-        alg_id::SGD_SM4_CTR => Ok(sm4_encrypt_ctr(key, iv, data)),
+        alg_id::SGD_SM4_CFB => Ok(sm4::sm4_encrypt_cfb(key, iv, data)),
+        // Reason: libsmx OFB/CTR 为对称操作，加解密共用同一函数
+        alg_id::SGD_SM4_OFB => Ok(sm4::sm4_crypt_ofb(key, iv, data)),
+        alg_id::SGD_SM4_CTR => Ok(sm4::sm4_crypt_ctr(key, iv, data)),
         _ => Err(format!("不支持的 SM4 算法标识: 0x{:08X}", alg)),
     }
 }
@@ -38,18 +30,16 @@ pub fn sm4_encrypt(key: &[u8; 16], iv: &[u8; 16], alg: u32, data: &[u8]) -> Resu
 /// SM4 解密（根据算法标识分发）
 pub fn sm4_decrypt(key: &[u8; 16], iv: &[u8; 16], alg: u32, data: &[u8]) -> Result<Vec<u8>, String> {
     match alg {
-        alg_id::SGD_SM4_ECB => Ok(sm4_decrypt_ecb(key, data)),
+        alg_id::SGD_SM4_ECB => Ok(sm4::sm4_decrypt_ecb(key, data)),
         alg_id::SGD_SM4_CBC => {
             if data.len() % 16 != 0 {
                 return Err(format!("CBC 模式数据长度必须为16的倍数，实际{}字节", data.len()));
             }
-            let mut out = vec![0u8; data.len()];
-            sm4_decrypt_cbc(key, iv, data, &mut out);
-            Ok(out)
+            Ok(sm4::sm4_decrypt_cbc(key, iv, data))
         }
-        alg_id::SGD_SM4_CFB => Ok(sm4_decrypt_cfb(key, iv, data)),
-        alg_id::SGD_SM4_OFB => Ok(sm4_decrypt_ofb(key, iv, data)),
-        alg_id::SGD_SM4_CTR => Ok(sm4_decrypt_ctr(key, iv, data)),
+        alg_id::SGD_SM4_CFB => Ok(sm4::sm4_decrypt_cfb(key, iv, data)),
+        alg_id::SGD_SM4_OFB => Ok(sm4::sm4_crypt_ofb(key, iv, data)),
+        alg_id::SGD_SM4_CTR => Ok(sm4::sm4_crypt_ctr(key, iv, data)),
         _ => Err(format!("不支持的 SM4 算法标识: 0x{:08X}", alg)),
     }
 }
@@ -64,7 +54,7 @@ pub fn sm4_gcm_encrypt(
     aad: &[u8],
     plaintext: &[u8],
 ) -> (Vec<u8>, [u8; 16]) {
-    sm4_encrypt_gcm(key, nonce, aad, plaintext)
+    sm4::sm4_encrypt_gcm(key, nonce, aad, plaintext)
 }
 
 /// SM4-GCM AEAD 解密
@@ -75,7 +65,7 @@ pub fn sm4_gcm_decrypt(
     ciphertext: &[u8],
     tag: &[u8; 16],
 ) -> Result<Vec<u8>, String> {
-    sm4_decrypt_gcm(key, nonce, aad, ciphertext, tag)
+    sm4::sm4_decrypt_gcm(key, nonce, aad, ciphertext, tag)
         .map_err(|e| format!("SM4-GCM 解密失败: {:?}", e))
 }
 
@@ -90,7 +80,9 @@ pub fn sm4_ccm_encrypt(
     plaintext: &[u8],
     tag_len: usize,
 ) -> Vec<u8> {
-    sm4_encrypt_ccm(key, nonce, aad, plaintext, tag_len)
+    // Reason: libsmx sm4_encrypt_ccm 返回 Result，参数合法时不会失败
+    sm4::sm4_encrypt_ccm(key, nonce, aad, plaintext, tag_len)
+        .expect("SM4-CCM 加密失败：参数非法")
 }
 
 /// SM4-CCM AEAD 解密
@@ -101,7 +93,7 @@ pub fn sm4_ccm_decrypt(
     ciphertext_with_tag: &[u8],
     tag_len: usize,
 ) -> Result<Vec<u8>, String> {
-    sm4_decrypt_ccm(key, nonce, aad, ciphertext_with_tag, tag_len)
+    sm4::sm4_decrypt_ccm(key, nonce, aad, ciphertext_with_tag, tag_len)
         .map_err(|e| format!("SM4-CCM 解密失败: {:?}", e))
 }
 
@@ -111,8 +103,7 @@ pub fn sm4_cbc_mac(key: &[u8; 16], iv: &[u8; 16], data: &[u8]) -> Result<[u8; 16
     if data.is_empty() || data.len() % 16 != 0 {
         return Err(format!("MAC 计算数据长度必须为16的整倍数，实际{}字节", data.len()));
     }
-    let mut out = vec![0u8; data.len()];
-    sm4_encrypt_cbc(key, iv, data, &mut out);
+    let out = sm4::sm4_encrypt_cbc(key, iv, data);
     // 取最后16字节作为 MAC
     let mac: [u8; 16] = out[out.len()-16..].try_into().unwrap();
     Ok(mac)

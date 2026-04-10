@@ -8,14 +8,13 @@ name = "sdf_mock"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-gm-sdk-rs = { git = "https://github.com/kintaiW/gm-sdk-rs.git", branch = "main" }
+libsmx = "0.3"
 toml = "0.8"
 serde = { version = "1", features = ["derive"] }
 log = "0.4"
 env_logger = "0.11"
 rand = "0.8"
 hex = "0.4"
-crypto-bigint = "0.6.0"
 
 [dev-dependencies]
 hex = "0.4"

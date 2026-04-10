@@ -1,10 +1,10 @@
 // SM3 算法封装
-// 封装 gm-sdk-rs 的 SM3，提供 init/update/final 状态机接口
+// 封装 libsmx 的 SM3，提供 init/update/final 状态机接口
 
-use gm_sdk::sm3::{sm3_hash, hmac_sm3};
+use libsmx::sm3;
 
 /// SM3 哈希状态机（用于 HashInit/HashUpdate/HashFinal）
-/// Reason: SDF 接口是流式哈希，需要维护中间状态
+/// Reason: SDF 接口是流式哈希，需要维护中间状态；libsmx 仅提供单次调用接口
 #[derive(Debug, Clone)]
 pub struct Sm3State {
     buffer: Vec<u8>,
@@ -22,7 +22,7 @@ impl Sm3State {
 
     /// 完成计算，返回32字节摘要
     pub fn finalize(&self) -> [u8; 32] {
-        sm3_hash(&self.buffer)
+        sm3::Sm3Hasher::digest(&self.buffer)
     }
 
     /// 重置状态
@@ -39,12 +39,12 @@ impl Default for Sm3State {
 
 /// 直接计算 SM3 哈希（一次性）
 pub fn sm3_digest(data: &[u8]) -> [u8; 32] {
-    sm3_hash(data)
+    sm3::Sm3Hasher::digest(data)
 }
 
 /// HMAC-SM3
 pub fn hmac_sm3_digest(key: &[u8], data: &[u8]) -> [u8; 32] {
-    hmac_sm3(key, data)
+    sm3::hmac_sm3(key, data)
 }
 
 #[cfg(test)]

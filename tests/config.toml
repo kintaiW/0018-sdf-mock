@@ -1,0 +1,20 @@
+# 连接池配置
+[connection_pool]
+max_connections = 64
+retry_times = 3
+timeout_seconds = 30
+idle_timeout_seconds = 300
+keep_alive_seconds = 60
+
+# 平台配置
+[platform]
+addresses = [
+    "192.168.177.32"
+]
+port = [9000]
+protocol = ["http"]
+
+# 日志配置 日志级别(从详细到无，测试建议 debug) debug, info, warn, error, off
+[log]
+level = "off"
+directory = "../"

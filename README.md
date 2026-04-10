@@ -3,13 +3,13 @@
 **GM/T 0018-2023 密码设备应用接口纯软件模拟库**
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-brightgreen)](https://kintaiw.github.io/0018-sdk-mock/)
+[![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-brightgreen)](https://kintaiw.github.io/0018-sdf-mock/)
 
 无需真实密码硬件，即可在开发和测试环境中调用标准 SDF 接口。输出标准动态库（Linux `.so` / Windows `.dll`），与 C、Rust 等语言无缝集成。
 
 > **⚠️ 警告**：本项目**仅供学习和开发测试使用**。配置文件中的示例密钥为公开测试值，**严禁用于生产环境**。
 
-**文档站点**：https://kintaiw.github.io/0018-sdk-mock/
+**文档站点**：https://kintaiw.github.io/0018-sdf-mock/
 
 ---
 
@@ -19,7 +19,7 @@
 - **国密算法支持**：SM2（签名/加密/密钥交换）、SM3（哈希/HMAC）、SM4（ECB/CBC/CFB/OFB/CTR/GCM/CCM）
 - **标准 C ABI**：`extern "C"` 导出，头文件 `sdf.h` 与任意 C/C++ 项目直接集成
 - **预设密钥配置**：通过 `mock_keys.toml` 预置 KEK、SM2 签名/加密密钥对，模拟硬件设备密钥区
-- **零硬件依赖**：基于 [gm-sdk-rs](https://github.com/kintaiW/gm-sdk-rs) 纯软件实现国密算法
+- **零硬件依赖**：基于 [libsmx](https://crates.io/crates/libsmx) 纯软件实现国密算法
 
 ---
 
@@ -167,7 +167,7 @@ SDF_CloseDevice
 ├── src/
 │   ├── ffi/          # C ABI 导出层（指针安全检查、类型转换）
 │   ├── sdf_impl/     # GM/T 0018 业务逻辑
-│   ├── crypto/       # 算法封装（对接 gm-sdk-rs）
+│   ├── crypto/       # 算法封装（对接 libsmx）
 │   ├── key_mgr/      # 内存密钥仓库 + 设备/会话上下文
 │   └── config/       # TOML 配置解析
 ├── tests/
@@ -194,7 +194,7 @@ RUST_LOG=debug cargo test -- --nocapture  # 显示日志
 
 ## 依赖
 
-- [gm-sdk-rs](https://github.com/kintaiW/gm-sdk-rs)：国密算法 SM2/SM3/SM4/SM9 实现
+- [libsmx](https://crates.io/crates/libsmx) 0.3：国密算法 SM2/SM3/SM4 实现（与 0016-skf-mock、0029-svs-mock 一致）
 - Rust 1.70+
 
 ---

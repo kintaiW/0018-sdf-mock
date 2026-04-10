@@ -32,8 +32,8 @@ pub fn sdf_hash_init(
         });
 
         if let Some(pk) = pk_bytes {
-            use gm_sdk::sm2::sm2_get_z;
-            let z = sm2_get_z(id, &pk);
+            use libsmx::sm2::get_z;
+            let z = get_z(id, &pk);
             state.update(&z);
         }
 

@@ -5,3 +5,5 @@ projectplan.md
 # Added by cargo
 
 /target
+*.pdf
+*.log
