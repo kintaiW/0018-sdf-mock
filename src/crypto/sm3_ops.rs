@@ -1,33 +1,41 @@
 // SM3 算法封装
 // 封装 libsmx 的 SM3，提供 init/update/final 状态机接口
 
-use libsmx::sm3;
+use libsmx::sm3::{Sm3Hasher, hmac_sm3};
 
 /// SM3 哈希状态机（用于 HashInit/HashUpdate/HashFinal）
-/// Reason: SDF 接口是流式哈希，需要维护中间状态；libsmx 仅提供单次调用接口
-#[derive(Debug, Clone)]
+/// Reason: SDF 接口是流式哈希，需要维护中间状态
+#[derive(Clone)]
 pub struct Sm3State {
-    buffer: Vec<u8>,
+    hasher: Sm3Hasher,
+}
+
+// Reason: Sm3Hasher 未实现 Debug，手动实现以满足上层 HashCtx 的 derive(Debug) 需求
+impl std::fmt::Debug for Sm3State {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Sm3State").finish_non_exhaustive()
+    }
 }
 
 impl Sm3State {
     pub fn new() -> Self {
-        Self { buffer: Vec::new() }
+        Self { hasher: Sm3Hasher::new() }
     }
 
     /// 追加数据
     pub fn update(&mut self, data: &[u8]) {
-        self.buffer.extend_from_slice(data);
+        self.hasher.update(data);
     }
 
     /// 完成计算，返回32字节摘要
+    /// Reason: finalize 消耗 self，通过 clone 保持原 hasher 不变
     pub fn finalize(&self) -> [u8; 32] {
-        sm3::Sm3Hasher::digest(&self.buffer)
+        self.hasher.clone().finalize()
     }
 
     /// 重置状态
     pub fn reset(&mut self) {
-        self.buffer.clear();
+        self.hasher.reset();
     }
 }
 
@@ -39,12 +47,12 @@ impl Default for Sm3State {
 
 /// 直接计算 SM3 哈希（一次性）
 pub fn sm3_digest(data: &[u8]) -> [u8; 32] {
-    sm3::Sm3Hasher::digest(data)
+    Sm3Hasher::digest(data)
 }
 
 /// HMAC-SM3
 pub fn hmac_sm3_digest(key: &[u8], data: &[u8]) -> [u8; 32] {
-    sm3::hmac_sm3(key, data)
+    hmac_sm3(key, data)
 }
 
 #[cfg(test)]

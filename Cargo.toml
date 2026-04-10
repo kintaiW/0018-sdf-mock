@@ -8,7 +8,7 @@ name = "sdf_mock"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-libsmx = "0.3"
+libsmx = "0.3.0"
 toml = "0.8"
 serde = { version = "1", features = ["derive"] }
 log = "0.4"
