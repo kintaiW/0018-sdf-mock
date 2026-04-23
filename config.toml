@@ -9,7 +9,7 @@ keep_alive_seconds = 60
 # 平台配置
 [platform]
 addresses = [
-    "192.168.177.32"
+    "YOUR_SDF_HOST"
 ]
 port = [9000]
 protocol = ["http"]
