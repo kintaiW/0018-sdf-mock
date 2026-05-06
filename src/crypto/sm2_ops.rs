@@ -117,9 +117,10 @@ pub fn sm2_ext_verify(pub_key: &[u8; 65], data: &[u8], sig: &ECCSignature) -> bo
 
 /// SM2 公钥加密 → GM/T 0018 ECCCipher
 /// libsmx 输出格式：C1(65) || C3(32) || C2(变长)，与旧版一致
+/// BREAKING(0.2.0): ECCCipher.C 最大128字节，与真实 SDK ABI 对齐
 pub fn sm2_enc(pub_key: &[u8; 65], plaintext: &[u8]) -> Result<ECCCipher, String> {
-    if plaintext.len() > 136 {
-        return Err(format!("明文最大136字节，实际{}字节", plaintext.len()));
+    if plaintext.len() > 128 {
+        return Err(format!("明文最大128字节，实际{}字节", plaintext.len()));
     }
     let mut rng = OsRng;
     let raw = encrypt(pub_key, plaintext, &mut rng)
@@ -141,7 +142,7 @@ pub fn sm2_enc(pub_key: &[u8; 65], plaintext: &[u8]) -> Result<ECCCipher, String
 pub fn sm2_dec(pri_key: &[u8; 32], cipher: &ECCCipher) -> Option<Vec<u8>> {
     let pri = PrivateKey::from_bytes(pri_key).ok()?;
     let c2_len = cipher.L as usize;
-    if c2_len > 136 {
+    if c2_len > 128 {
         return None;
     }
     // 重组为 libsmx 格式：C1(65) || C3(32) || C2

@@ -1,6 +1,6 @@
 // 设备管理 FFI 导出
-use std::os::raw::{c_int, c_void, c_uint};
-use crate::error_code::SDR_PARAMERR;
+use std::os::raw::{c_int, c_void, c_uint, c_uchar};
+use crate::error_code::SDR_INARGERR;
 use crate::sdf_impl::device::*;
 use crate::types::DEVICEINFO;
 
@@ -30,7 +30,7 @@ pub extern "C" fn SDF_OpenSession(
     phSessionHandle: *mut *mut c_void,
 ) -> c_int {
     if phSessionHandle.is_null() {
-        return SDR_PARAMERR;
+        return SDR_INARGERR;
     }
     let mut handle: u32 = 0;
     let ret = sdf_open_session(&mut handle);
@@ -54,8 +54,33 @@ pub extern "C" fn SDF_GetDeviceInfo(
     pstDeviceInfo: *mut DEVICEINFO,
 ) -> c_int {
     if pstDeviceInfo.is_null() {
-        return SDR_PARAMERR;
+        return SDR_INARGERR;
     }
     let handle = hSessionHandle as usize as u32;
     unsafe { sdf_get_device_info(handle, &mut *pstDeviceInfo) }
+}
+
+/// SDF_Test — 设备内部一致性自检（计算 SM3 哈希后写入输出缓冲）
+#[no_mangle]
+pub extern "C" fn SDF_Test(
+    hSessionHandle: *mut c_void,
+    pucData: *const c_uchar,
+    uiDataLength: c_uint,
+    pucTestResult: *mut c_uchar,
+    puiTestResultLength: *mut c_uint,
+) -> c_int {
+    if pucData.is_null() || pucTestResult.is_null() || puiTestResultLength.is_null() {
+        return SDR_INARGERR;
+    }
+    let handle = hSessionHandle as usize as u32;
+    let data = unsafe { std::slice::from_raw_parts(pucData, uiDataLength as usize) };
+    let mut out = Vec::new();
+    let ret = sdf_test(handle, data, &mut out);
+    if ret == 0 {
+        unsafe {
+            std::ptr::copy_nonoverlapping(out.as_ptr(), pucTestResult, out.len());
+            *puiTestResultLength = out.len() as c_uint;
+        }
+    }
+    ret
 }

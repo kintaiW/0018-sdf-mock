@@ -3,39 +3,83 @@ use crate::error_code::*;
 use crate::sdf_impl::device::with_session;
 use crate::key_mgr::{KeyType, KeyData};
 use crate::crypto::{sm2_keygen, generate_random, sm4_encrypt as sm4_enc, sm4_decrypt as sm4_dec};
-use crate::types::{ECCrefPublicKey, ECCrefPrivateKey, ECCCipher, alg_id};
+use crate::types::{ECCrefPublicKey, ECCrefPrivateKey, ECCCipher, alg_id, RSArefPublicKey, RSArefPrivateKey};
 use crate::crypto::sm2_ops::{
     pub_key_to_ecc_ref, ecc_ref_to_pub_key, ecc_ref_to_pri_key,
     sm2_enc, sm2_dec,
 };
+use crate::key_mgr::session::AgreementData;
+use crate::crypto::rsa_ops::{rsa_load_private_key, rsa_pub_from_priv, rsa_pub_to_ref, rsa_priv_to_ref};
 
-// ──────────────── RSA Stub（Mock 不支持 RSA）────────────────
+// ──────────────── RSA 接口（真实运算）────────────────
 
-/// SDF_ExportSignPublicKey_RSA — Mock 不支持 RSA，直接返回 SDR_NOTSUPPORT
+/// SDF_ExportSignPublicKey_RSA — 导出 RSA 签名公钥
 pub fn sdf_export_sign_public_key_rsa(
-    _session_handle: u32,
-    _key_index: u32,
+    session_handle: u32,
+    key_index: u32,
+    pub_key: &mut RSArefPublicKey,
 ) -> i32 {
-    log::warn!("SDF_ExportSignPublicKey_RSA: RSA 不支持");
-    SDR_NOTSUPPORT
+    with_session(session_handle, |res| {
+        let session = match res { Ok(s) => s, Err(e) => return e };
+        match session.key_store.get_rsa_sign_key(key_index) {
+            Some(priv_k) => {
+                *pub_key = rsa_pub_to_ref(&rsa_pub_from_priv(&priv_k));
+                log::debug!("SDF_ExportSignPublicKey_RSA: index={}", key_index);
+                SDR_OK
+            }
+            None => {
+                log::warn!("SDF_ExportSignPublicKey_RSA: RSA签名密钥索引{}不存在", key_index);
+                SDR_KEYNOTEXIST
+            }
+        }
+    })
 }
 
-/// SDF_ExportEncPublicKey_RSA — Mock 不支持 RSA，直接返回 SDR_NOTSUPPORT
+/// SDF_ExportEncPublicKey_RSA — 导出 RSA 加密公钥
 pub fn sdf_export_enc_public_key_rsa(
-    _session_handle: u32,
-    _key_index: u32,
+    session_handle: u32,
+    key_index: u32,
+    pub_key: &mut RSArefPublicKey,
 ) -> i32 {
-    log::warn!("SDF_ExportEncPublicKey_RSA: RSA 不支持");
-    SDR_NOTSUPPORT
+    with_session(session_handle, |res| {
+        let session = match res { Ok(s) => s, Err(e) => return e };
+        match session.key_store.get_rsa_enc_key(key_index) {
+            Some(priv_k) => {
+                *pub_key = rsa_pub_to_ref(&rsa_pub_from_priv(&priv_k));
+                log::debug!("SDF_ExportEncPublicKey_RSA: index={}", key_index);
+                SDR_OK
+            }
+            None => {
+                log::warn!("SDF_ExportEncPublicKey_RSA: RSA加密密钥索引{}不存在", key_index);
+                SDR_KEYNOTEXIST
+            }
+        }
+    })
 }
 
-/// SDF_GenerateKeyPair_RSA — Mock 不支持 RSA，直接返回 SDR_NOTSUPPORT
+/// SDF_GenerateKeyPair_RSA — 生成 RSA 密钥对（临时，不存储到密钥库）
 pub fn sdf_generate_key_pair_rsa(
-    _session_handle: u32,
-    _bits: u32,
+    session_handle: u32,
+    bits: u32,
+    pub_key: &mut RSArefPublicKey,
+    pri_key: &mut RSArefPrivateKey,
 ) -> i32 {
-    log::warn!("SDF_GenerateKeyPair_RSA: RSA 不支持");
-    SDR_NOTSUPPORT
+    if bits != 1024 && bits != 2048 && bits != 4096 {
+        return SDR_INARGERR;
+    }
+    with_session(session_handle, |res| {
+        if let Err(e) = res { return e; }
+        use rsa::rand_core::OsRng;
+        match rsa::RsaPrivateKey::new(&mut OsRng, bits as usize) {
+            Ok(priv_k) => {
+                *pub_key = rsa_pub_to_ref(&rsa_pub_from_priv(&priv_k));
+                *pri_key = rsa_priv_to_ref(&priv_k);
+                log::debug!("SDF_GenerateKeyPair_RSA: bits={}", bits);
+                SDR_OK
+            }
+            Err(e) => { log::error!("RSA密钥生成失败: {}", e); SDR_PKOPERR }
+        }
+    })
 }
 
 // ──────────────── 设备/会话密钥管理 ────────────────
@@ -43,7 +87,7 @@ pub fn sdf_generate_key_pair_rsa(
 /// SDF_GenerateRandom — 生成随机数
 pub fn sdf_generate_random(session_handle: u32, length: u32, random: &mut Vec<u8>) -> i32 {
     if length == 0 || length > 4096 {
-        return SDR_PARAMERR;
+        return SDR_INARGERR;
     }
     with_session(session_handle, |res| {
         if let Err(e) = res { return e; }
@@ -94,7 +138,7 @@ pub fn sdf_export_sign_public_key_ecc(
             }
             None => {
                 log::warn!("SDF_ExportSignPublicKey_ECC: 签名密钥索引{}不存在", key_index);
-                SDR_KEYINDEX
+                SDR_KEYNOTEXIST
             }
         }
     })
@@ -116,7 +160,7 @@ pub fn sdf_export_enc_public_key_ecc(
             }
             None => {
                 log::warn!("SDF_ExportEncPublicKey_ECC: 加密密钥索引{}不存在", key_index);
-                SDR_KEYINDEX
+                SDR_KEYNOTEXIST
             }
         }
     })
@@ -151,7 +195,7 @@ pub fn sdf_import_key(
     key_handle: &mut u32,
 ) -> i32 {
     if key_data.len() != 16 {
-        return SDR_PARAMERR;
+        return SDR_INARGERR;
     }
     with_session(session_handle, |res| {
         let session = match res { Ok(s) => s, Err(e) => return e };
@@ -175,7 +219,7 @@ pub fn sdf_generate_key_with_kek(
     key_handle: &mut u32,
 ) -> i32 {
     if bits != 128 {
-        return SDR_PARAMERR; // 仅支持 SM4 128位
+        return SDR_INARGERR; // 仅支持 SM4 128位
     }
     with_session(session_handle, |res| {
         let session = match res { Ok(s) => s, Err(e) => return e };
@@ -183,7 +227,7 @@ pub fn sdf_generate_key_with_kek(
             Some(k) => *k,
             None => {
                 log::warn!("SDF_GenerateKeyWithKEK: KEK索引{}不存在", kek_index);
-                return SDR_KEYINDEX;
+                return SDR_KEYNOTEXIST;
             }
         };
         // 生成随机 SM4 会话密钥
@@ -215,13 +259,13 @@ pub fn sdf_import_key_with_kek(
     key_handle: &mut u32,
 ) -> i32 {
     if cipher_key.len() != 16 {
-        return SDR_PARAMERR;
+        return SDR_INARGERR;
     }
     with_session(session_handle, |res| {
         let session = match res { Ok(s) => s, Err(e) => return e };
         let kek = match session.key_store.get_kek(kek_index) {
             Some(k) => *k,
-            None => return SDR_KEYINDEX,
+            None => return SDR_KEYNOTEXIST,
         };
         let iv = [0u8; 16];
         let plain = match sm4_dec(&kek, &iv, alg_id::SGD_SM4_ECB, cipher_key) {
@@ -247,13 +291,13 @@ pub fn sdf_generate_key_with_ipk_ecc(
     key_handle: &mut u32,
 ) -> i32 {
     if bits != 128 {
-        return SDR_PARAMERR;
+        return SDR_INARGERR;
     }
     with_session(session_handle, |res| {
         let session = match res { Ok(s) => s, Err(e) => return e };
         let pub_k = match session.key_store.get_enc_public_key(ipk_index) {
             Some(pk) => pk,
-            None => return SDR_KEYINDEX,
+            None => return SDR_KEYNOTEXIST,
         };
         // 生成随机 SM4 会话密钥并用 SM2 加密
         let session_key = generate_random(16);
@@ -283,7 +327,7 @@ pub fn sdf_generate_key_with_epk_ecc(
     key_handle: &mut u32,
 ) -> i32 {
     if bits != 128 {
-        return SDR_PARAMERR;
+        return SDR_INARGERR;
     }
     with_session(session_handle, |res| {
         let session = match res { Ok(s) => s, Err(e) => return e };
@@ -320,7 +364,7 @@ pub fn sdf_import_key_with_isk_ecc(
         }
         let pri_k = match session.key_store.get_enc_key(isk_index) {
             Some((pri, _)) => *pri,
-            None => return SDR_KEYINDEX,
+            None => return SDR_KEYNOTEXIST,
         };
         match sm2_dec(&pri_k, cipher_key) {
             Some(plain) => {
@@ -348,5 +392,152 @@ pub fn sdf_destroy_key(session_handle: u32, key_handle: u32) -> i32 {
             log::warn!("SDF_DestroyKey: 密钥句柄0x{:08X}不存在", key_handle);
             SDR_KEYNOTEXIST
         }
+    })
+}
+
+// ──────────────── ECC 密钥协商 ────────────────
+
+/// SDF_GenerateAgreementDataWithECC — 发起方生成临时密钥对和协商数据
+/// isk_index: 本端长期加密密钥索引
+/// sponsor_id: 本端用户 ID（用于 SM2 KDF）
+/// sponsor_pub_key: 本端长期公钥（输出）
+/// sponsor_tmp_pub_key: 本端临时公钥（输出）
+pub fn sdf_generate_agreement_data_with_ecc(
+    session_handle: u32,
+    isk_index: u32,
+    sponsor_id: &[u8],
+    sponsor_pub_key: &mut ECCrefPublicKey,
+    sponsor_tmp_pub_key: &mut ECCrefPublicKey,
+) -> i32 {
+    with_session(session_handle, |res| {
+        let session = match res { Ok(s) => s, Err(e) => return e };
+        // 取本端长期加密密钥
+        let (_, long_pub) = match session.key_store.get_enc_key(isk_index) {
+            Some(kp) => *kp,
+            None => return SDR_KEYNOTEXIST,
+        };
+        // 生成临时密钥对
+        let (tmp_pri, tmp_pub) = sm2_keygen();
+        session.agreement_data = Some(AgreementData {
+            tmp_private: tmp_pri,
+            tmp_public: tmp_pub,
+            isk_index,
+            id: sponsor_id.to_vec(),
+        });
+        *sponsor_pub_key = pub_key_to_ecc_ref(&long_pub);
+        *sponsor_tmp_pub_key = pub_key_to_ecc_ref(&tmp_pub);
+        log::debug!("SDF_GenerateAgreementDataWithECC: isk_index={}", isk_index);
+        SDR_OK
+    })
+}
+
+/// SDF_GenerateKeyWithECC — 响应方用对端协商数据生成会话密钥
+/// 简化实现：用 SM3 对双方临时公钥做 KDF 派生 SM4 密钥
+pub fn sdf_generate_key_with_ecc(
+    session_handle: u32,
+    response_id: &[u8],
+    response_pub_key: &ECCrefPublicKey,
+    response_tmp_pub_key: &ECCrefPublicKey,
+    key_bits: u32,
+    key_handle: &mut u32,
+) -> i32 {
+    if key_bits != 128 { return SDR_INARGERR; }
+    with_session(session_handle, |res| {
+        let session = match res { Ok(s) => s, Err(e) => return e };
+        let agr = match session.agreement_data.take() {
+            Some(a) => a,
+            None => return SDR_STEPERR,
+        };
+        // Reason: 简化 SM2 密钥协商，用 SM3(tmp_pub_A || tmp_pub_B || id_A || id_B) 作为 KDF 输入
+        let tmp_pub_a = ecc_ref_to_pub_key(&pub_key_to_ecc_ref(&agr.tmp_public));
+        let tmp_pub_b = ecc_ref_to_pub_key(response_tmp_pub_key);
+        let _ = ecc_ref_to_pub_key(response_pub_key); // 输入合法性检查
+        let mut kdf_input = Vec::new();
+        kdf_input.extend_from_slice(&tmp_pub_a);
+        kdf_input.extend_from_slice(&tmp_pub_b);
+        kdf_input.extend_from_slice(&agr.id);
+        kdf_input.extend_from_slice(response_id);
+        let digest = libsmx::sm3::Sm3Hasher::digest(&kdf_input);
+        let session_key: [u8; 16] = digest[..16].try_into().unwrap();
+        let handle = session.key_store.store_session_key(
+            crate::key_mgr::KeyType::Symmetric,
+            crate::key_mgr::KeyData::Symmetric(session_key.to_vec()),
+        );
+        *key_handle = handle;
+        log::debug!("SDF_GenerateKeyWithECC: 会话密钥已生成 handle=0x{:08X}", handle);
+        SDR_OK
+    })
+}
+
+/// SDF_GenerateAgreementDataAndKeyWithECC — 响应方同时生成协商数据和会���密钥
+pub fn sdf_generate_agreement_data_and_key_with_ecc(
+    session_handle: u32,
+    isk_index: u32,
+    response_id: &[u8],
+    sponsor_id: &[u8],
+    sponsor_pub_key: &ECCrefPublicKey,
+    sponsor_tmp_pub_key: &ECCrefPublicKey,
+    response_pub_key: &mut ECCrefPublicKey,
+    response_tmp_pub_key: &mut ECCrefPublicKey,
+    key_bits: u32,
+    key_handle: &mut u32,
+) -> i32 {
+    if key_bits != 128 { return SDR_INARGERR; }
+    with_session(session_handle, |res| {
+        let session = match res { Ok(s) => s, Err(e) => return e };
+        let (_, long_pub) = match session.key_store.get_enc_key(isk_index) {
+            Some(kp) => *kp,
+            None => return SDR_KEYNOTEXIST,
+        };
+        let (tmp_pri_b, tmp_pub_b) = sm2_keygen();
+        *response_pub_key = pub_key_to_ecc_ref(&long_pub);
+        *response_tmp_pub_key = pub_key_to_ecc_ref(&tmp_pub_b);
+
+        let tmp_pub_a = ecc_ref_to_pub_key(sponsor_tmp_pub_key);
+        let _ = (ecc_ref_to_pub_key(sponsor_pub_key), tmp_pri_b); // 合法性检查；tmp_pri_b 未来 ECDH 可用
+        let mut kdf_input = Vec::new();
+        kdf_input.extend_from_slice(&tmp_pub_a);
+        kdf_input.extend_from_slice(&tmp_pub_b);
+        kdf_input.extend_from_slice(sponsor_id);
+        kdf_input.extend_from_slice(response_id);
+        let digest = libsmx::sm3::Sm3Hasher::digest(&kdf_input);
+        let session_key: [u8; 16] = digest[..16].try_into().unwrap();
+        let handle = session.key_store.store_session_key(
+            crate::key_mgr::KeyType::Symmetric,
+            crate::key_mgr::KeyData::Symmetric(session_key.to_vec()),
+        );
+        *key_handle = handle;
+        log::debug!("SDF_GenerateAgreementDataAndKeyWithECC: isk_index={} handle=0x{:08X}", isk_index, handle);
+        SDR_OK
+    })
+}
+
+/// sdf_generate_key_with_epk_ecc_agreement — 用对端临时公钥协商会话密钥（用已有 AgreementData）
+pub fn sdf_generate_key_with_epk_ecc_agreement(
+    session_handle: u32,
+    key_bits: u32,
+    epk: &ECCrefPublicKey,
+    key_handle: &mut u32,
+) -> i32 {
+    if key_bits != 128 { return SDR_INARGERR; }
+    with_session(session_handle, |res| {
+        let session = match res { Ok(s) => s, Err(e) => return e };
+        let agr = match session.agreement_data.take() {
+            Some(a) => a,
+            None => return SDR_STEPERR,
+        };
+        let epk_bytes = ecc_ref_to_pub_key(epk);
+        let mut kdf_input = Vec::new();
+        kdf_input.extend_from_slice(&agr.tmp_public);
+        kdf_input.extend_from_slice(&epk_bytes);
+        kdf_input.extend_from_slice(&agr.id);
+        let digest = libsmx::sm3::Sm3Hasher::digest(&kdf_input);
+        let session_key: [u8; 16] = digest[..16].try_into().unwrap();
+        let handle = session.key_store.store_session_key(
+            crate::key_mgr::KeyType::Symmetric,
+            crate::key_mgr::KeyData::Symmetric(session_key.to_vec()),
+        );
+        *key_handle = handle;
+        SDR_OK
     })
 }

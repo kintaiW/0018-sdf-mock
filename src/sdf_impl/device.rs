@@ -1,5 +1,5 @@
 // 设备管理接口实现
-// SDF_OpenDevice / SDF_CloseDevice / SDF_OpenSession / SDF_CloseSession / SDF_GetDeviceInfo
+// SDF_OpenDevice / SDF_CloseDevice / SDF_OpenSession / SDF_CloseSession / SDF_GetDeviceInfo / SDF_Test
 
 use std::sync::{Mutex, OnceLock};
 use crate::config::{AppConfig, MockConfig};
@@ -162,7 +162,7 @@ pub fn sdf_close_session(session_handle: u32) -> i32 {
         SDR_OK
     } else {
         log::warn!("SDF_CloseSession: 无效会话句柄 0x{:08X}", session_handle);
-        SDR_INVALIDHANDLE
+        SDR_INARGERR
     }
 }
 
@@ -177,7 +177,7 @@ pub fn sdf_get_device_info(session_handle: u32, info: &mut DEVICEINFO) -> i32 {
         None => return SDR_OPENDEVICE,
     };
     if ctx.get_session(session_handle).is_none() {
-        return SDR_INVALIDHANDLE;
+        return SDR_INARGERR;
     }
     let cfg = &ctx.mock_cfg.device;
     // 填充设备信息
@@ -214,11 +214,23 @@ where
     };
     match ctx.get_session_mut(session_handle) {
         Some(s) => f(Ok(s)),
-        None => f(Err(SDR_INVALIDHANDLE)),
+        None => f(Err(SDR_INARGERR)),
     }
 }
 
-#[cfg(test)]
+/// SDF_Test — 设备内部一致性自检
+/// 实现：对输入数据计算 SM3 哈希并写入输出缓冲，用于验证 Mock 内部算法一致性
+pub fn sdf_test(session_handle: u32, in_data: &[u8], out_data: &mut Vec<u8>) -> i32 {
+    with_session(session_handle, |res| {
+        if let Err(e) = res { return e; }
+        let digest = libsmx::sm3::Sm3Hasher::digest(in_data);
+        *out_data = digest.to_vec();
+        log::debug!("SDF_Test: in_len={}, out_len={}", in_data.len(), out_data.len());
+        SDR_OK
+    })
+}
+
+
 mod tests {
     use super::*;
     use std::sync::Mutex;
@@ -259,7 +271,7 @@ mod tests {
         let _guard = TEST_MUTEX.lock().unwrap();
         cleanup();
         assert_eq!(sdf_open_device(), SDR_OK);
-        assert_eq!(sdf_close_session(0xDEADBEEF), SDR_INVALIDHANDLE);
+        assert_eq!(sdf_close_session(0xDEADBEEF), SDR_INARGERR);
         assert_eq!(sdf_close_device(), SDR_OK);
         cleanup();
     }

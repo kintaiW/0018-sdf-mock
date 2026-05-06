@@ -53,7 +53,7 @@ pub fn sdf_hash_init(
 /// SDF_HashUpdate — 追加哈希数据
 pub fn sdf_hash_update(session_handle: u32, data: &[u8]) -> i32 {
     if data.is_empty() {
-        return SDR_PARAMERR;
+        return SDR_INARGERR;
     }
     with_session(session_handle, |res| {
         let session = match res { Ok(s) => s, Err(e) => return e };
@@ -109,7 +109,7 @@ pub fn sdf_hmac_init(session_handle: u32, key_handle: u32, _alg: u32) -> i32 {
 /// SDF_HMACUpdate — 追加 HMAC 数据
 pub fn sdf_hmac_update(session_handle: u32, data: &[u8]) -> i32 {
     if data.is_empty() {
-        return SDR_PARAMERR;
+        return SDR_INARGERR;
     }
     with_session(session_handle, |res| {
         let session = match res { Ok(s) => s, Err(e) => return e };

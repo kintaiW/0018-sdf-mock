@@ -3,7 +3,6 @@
 // 每个 SDF_OpenSession 创建一个 SessionContext
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::key_mgr::KeyStore;
@@ -41,6 +40,48 @@ pub struct AgreementData {
     pub id: Vec<u8>,
 }
 
+/// 流式对称加解密方向
+#[derive(Debug, Clone, PartialEq)]
+pub enum Direction {
+    Encrypt,
+    Decrypt,
+}
+
+/// 流式对称操作上下文（EncryptInit/Update/Final 和 DecryptInit/Update/Final 共用）
+#[derive(Debug, Clone)]
+pub struct SymStreamCtx {
+    pub key_handle: u32,
+    pub alg_id: u32,
+    /// 当前 IV（CBC/OFB/CFB 每个 Update 后更新）
+    pub iv: [u8; 16],
+    /// 边界缓冲（ECB/CBC 需要16字节对齐时暂存不完整块）
+    pub buffer: Vec<u8>,
+    pub direction: Direction,
+}
+
+/// 流式 MAC 上下文（CalculateMACInit/Update/Final）
+#[derive(Debug, Clone)]
+pub struct MacStreamCtx {
+    pub key_handle: u32,
+    pub iv: [u8; 16],
+    /// 累积数据（Final 时一次性计算）
+    pub buffer: Vec<u8>,
+}
+
+/// 流式 AEAD 上下文（AuthEncInit/Update/Final 和 AuthDecInit/Update/Final 共用）
+/// Reason: GCM 简化为全累积模式，Final 时一次性出密文+tag，与真机行为等价
+#[derive(Debug, Clone)]
+pub struct AeadStreamCtx {
+    pub key_handle: u32,
+    pub nonce: [u8; 12],
+    pub aad: Vec<u8>,
+    /// 累积的明文（Encrypt）或密文（Decrypt）
+    pub buffer: Vec<u8>,
+    pub direction: Direction,
+    /// Decrypt 时存储 auth tag
+    pub auth_tag: Option<[u8; 16]>,
+}
+
 /// 会话上下文（每个 SDF_OpenSession 独立一个）
 pub struct SessionContext {
     pub handle: u32,
@@ -53,6 +94,12 @@ pub struct SessionContext {
     pub agreement_data: Option<AgreementData>,
     /// 私钥访问授权集合（已授权的密钥索引）
     pub authorized_keys: std::collections::HashSet<u32>,
+    /// 流式对称加解密上下文
+    pub sym_stream: Option<SymStreamCtx>,
+    /// 流式 MAC 上下文
+    pub mac_stream: Option<MacStreamCtx>,
+    /// 流式 AEAD 上下文
+    pub aead_stream: Option<AeadStreamCtx>,
 }
 
 impl SessionContext {
@@ -67,6 +114,9 @@ impl SessionContext {
             hmac_ctx: None,
             agreement_data: None,
             authorized_keys: std::collections::HashSet::new(),
+            sym_stream: None,
+            mac_stream: None,
+            aead_stream: None,
         }
     }
 }
@@ -114,3 +164,4 @@ impl DeviceContext {
         self.sessions.get(&handle)
     }
 }
+

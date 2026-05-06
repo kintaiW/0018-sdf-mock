@@ -20,16 +20,31 @@ impl Default for LogConfig {
     }
 }
 
-/// config.toml 的顶层结构（只提取 log 段，其余段忽略）
+/// config.toml 的顶层结构。
+/// connection_pool / platform / tls 段被静默接受（用 toml::Value），
+/// 便于把真实 SDK 的 config.toml 直接用于 Mock 开发环境而不报错。
 #[derive(Debug, Deserialize, Default)]
 struct RawConfig {
     #[serde(default)]
     pub log: LogConfig,
+    /// 兼容真实 SDK config.toml，不解析，仅接受不报错
+    #[serde(default)]
+    pub connection_pool: Option<toml::Value>,
+    #[serde(default)]
+    pub platform: Option<toml::Value>,
+    #[serde(default)]
+    pub tls: Option<toml::Value>,
 }
 
 #[derive(Debug, Clone)]
 pub struct AppConfig {
     pub log: LogConfig,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self { log: LogConfig::default() }
+    }
 }
 
 impl AppConfig {
@@ -77,4 +92,28 @@ directory = "/tmp"
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("config.toml 不存在"));
     }
+
+    /// 验证真实 SDK 的 config.toml 格式（含 connection_pool/platform/tls）被静默接受
+    #[test]
+    fn test_real_sdk_config_compatible() {
+        let f = make_toml(r#"
+[connection_pool]
+max_connections = 10
+timeout = 30
+
+[platform]
+address = "www.sdfserver_rsa.com"
+port = 9010
+
+[tls]
+ca_cert_path = "./client_ca_rsa.cert.pem"
+
+[log]
+level = "info"
+directory = "/tmp"
+"#);
+        let cfg = AppConfig::load(f.path()).unwrap();
+        assert_eq!(cfg.log.level, "info");
+    }
 }
+

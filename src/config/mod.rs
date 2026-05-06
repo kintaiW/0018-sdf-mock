@@ -2,5 +2,5 @@
 pub mod app_config;
 pub mod mock_config;
 
-pub use app_config::AppConfig;
+pub use app_config::{AppConfig, LogConfig};
 pub use mock_config::MockConfig;

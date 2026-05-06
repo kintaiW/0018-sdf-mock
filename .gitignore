@@ -3,7 +3,9 @@ projectplan.md
 .claude/
 projectplan.md
 # Added by cargo
-
+/sdf-sdk
 /target
 *.pdf
 *.log
+/tests
+/scripts

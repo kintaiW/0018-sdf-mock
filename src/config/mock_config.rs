@@ -67,6 +67,20 @@ pub struct EncKeyConfig {
     pub public_key: String,
 }
 
+/// RSA 签名密钥（PKCS#8 PEM 格式）
+#[derive(Debug, Deserialize, Clone)]
+pub struct RsaSignKeyConfig {
+    pub index: u32,
+    pub private_key_pem: String,
+}
+
+/// RSA 加密密钥（PKCS#8 PEM 格式）
+#[derive(Debug, Deserialize, Clone)]
+pub struct RsaEncKeyConfig {
+    pub index: u32,
+    pub private_key_pem: String,
+}
+
 /// mock_keys.toml 顶层结构
 #[derive(Debug, Deserialize, Clone)]
 pub struct MockConfigRaw {
@@ -79,6 +93,10 @@ pub struct MockConfigRaw {
     pub sign_keys: Vec<SignKeyConfig>,
     #[serde(default)]
     pub enc_keys: Vec<EncKeyConfig>,
+    #[serde(default)]
+    pub rsa_sign_keys: Vec<RsaSignKeyConfig>,
+    #[serde(default)]
+    pub rsa_enc_keys: Vec<RsaEncKeyConfig>,
 }
 
 /// 解码后的密钥数据（已转为字节数组）
@@ -104,12 +122,21 @@ pub struct EncKey {
 }
 
 #[derive(Debug, Clone)]
+pub struct RsaKeyEntry {
+    pub index: u32,
+    /// PKCS#8 PEM 私钥原文（由 key_store 解析为 RsaPrivateKey）
+    pub private_key_pem: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct MockConfig {
     pub device: DeviceConfig,
     pub root_key: [u8; 16],
     pub kek_keys: Vec<KekKey>,
     pub sign_keys: Vec<SignKey>,
     pub enc_keys: Vec<EncKey>,
+    pub rsa_sign_keys: Vec<RsaKeyEntry>,
+    pub rsa_enc_keys: Vec<RsaKeyEntry>,
 }
 
 #[derive(Debug)]
@@ -210,7 +237,14 @@ impl MockConfig {
             enc_keys.push(EncKey { index: k.index, private_key, public_key });
         }
 
-        Ok(MockConfig { device: raw.device, root_key, kek_keys, sign_keys, enc_keys })
+        Ok(MockConfig { device: raw.device, root_key, kek_keys, sign_keys, enc_keys,
+            rsa_sign_keys: raw.rsa_sign_keys.iter().map(|k| RsaKeyEntry {
+                index: k.index, private_key_pem: k.private_key_pem.clone(),
+            }).collect(),
+            rsa_enc_keys: raw.rsa_enc_keys.iter().map(|k| RsaKeyEntry {
+                index: k.index, private_key_pem: k.private_key_pem.clone(),
+            }).collect(),
+        })
     }
 
     /// 尝试多个路径加载配置，全部失败时使用空配置（Mock场景下可接受）
@@ -255,6 +289,8 @@ impl MockConfig {
             kek_keys: vec![],
             sign_keys: vec![],
             enc_keys: vec![],
+            rsa_sign_keys: vec![],
+            rsa_enc_keys: vec![],
         }
     }
 }

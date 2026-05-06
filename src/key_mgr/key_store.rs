@@ -62,6 +62,10 @@ pub struct KeyStore {
     enc_keys: HashMap<u32, ([u8; 32], [u8; 65])>,
     /// 设备根密钥
     root_key: [u8; 16],
+    /// RSA 签名私钥：索引 -> PEM 字符串（懒解析）
+    rsa_sign_pem: HashMap<u32, String>,
+    /// RSA 加密私钥：索引 -> PEM 字符串（懒解析）
+    rsa_enc_pem: HashMap<u32, String>,
 }
 
 impl KeyStore {
@@ -81,8 +85,15 @@ impl KeyStore {
         for k in &cfg.enc_keys {
             self.enc_keys.insert(k.index, (k.private_key, k.public_key));
         }
-        log::info!("密钥仓库已加载: KEK={}, 签名密钥={}, 加密密钥={}",
-            self.kek_keys.len(), self.sign_keys.len(), self.enc_keys.len());
+        for k in &cfg.rsa_sign_keys {
+            self.rsa_sign_pem.insert(k.index, k.private_key_pem.clone());
+        }
+        for k in &cfg.rsa_enc_keys {
+            self.rsa_enc_pem.insert(k.index, k.private_key_pem.clone());
+        }
+        log::info!("密钥仓库已加载: KEK={}, 签名密钥={}, 加密密钥={}, RSA签名={}, RSA加密={}",
+            self.kek_keys.len(), self.sign_keys.len(), self.enc_keys.len(),
+            self.rsa_sign_pem.len(), self.rsa_enc_pem.len());
     }
 
     /// 生成新的会话密钥句柄（线程安全的原子递增）
@@ -135,6 +146,28 @@ impl KeyStore {
     /// 预设加密公钥（只需公钥时）
     pub fn get_enc_public_key(&self, index: u32) -> Option<[u8; 65]> {
         self.enc_keys.get(&index).map(|(_, pub_key)| *pub_key)
+    }
+
+    /// 获取 RSA 签名私钥（懒解析 PEM 为 RsaPrivateKey）
+    pub fn get_rsa_sign_key(&self, index: u32) -> Option<rsa::RsaPrivateKey> {
+        let pem = self.rsa_sign_pem.get(&index)?;
+        crate::crypto::rsa_ops::rsa_load_private_key(pem).ok()
+    }
+
+    /// 获取 RSA 加密私钥
+    pub fn get_rsa_enc_key(&self, index: u32) -> Option<rsa::RsaPrivateKey> {
+        let pem = self.rsa_enc_pem.get(&index)?;
+        crate::crypto::rsa_ops::rsa_load_private_key(pem).ok()
+    }
+
+    /// 检查 RSA 签名密钥索引是否存在
+    pub fn has_rsa_sign_key(&self, index: u32) -> bool {
+        self.rsa_sign_pem.contains_key(&index)
+    }
+
+    /// 检查 RSA 加密密钥索引是否存在
+    pub fn has_rsa_enc_key(&self, index: u32) -> bool {
+        self.rsa_enc_pem.contains_key(&index)
     }
 }
 

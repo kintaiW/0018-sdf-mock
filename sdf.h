@@ -576,6 +576,59 @@ SDF_API int SDF_ReadFile(void *hSessionHandle,
 SDF_API int SDF_DeleteFile(void *hSessionHandle,
                             const unsigned char *pucFileName, unsigned int uiNameLen);
 
+/* ============================================================
+ *  流式对称加解密（Init/Update/Final）
+ * ============================================================ */
+SDF_API int SDF_EncryptInit(void *hSessionHandle, void *hKeyHandle,
+                             unsigned int uiAlgID, unsigned char *pucIV);
+SDF_API int SDF_EncryptUpdate(void *hSessionHandle,
+                               unsigned char *pucData, unsigned int uiDataLength,
+                               unsigned char *pucEncData, unsigned int *puiEncDataLength);
+SDF_API int SDF_EncryptFinal(void *hSessionHandle,
+                              unsigned char *pucEncData, unsigned int *puiEncDataLength);
+
+SDF_API int SDF_DecryptInit(void *hSessionHandle, void *hKeyHandle,
+                             unsigned int uiAlgID, unsigned char *pucIV);
+SDF_API int SDF_DecryptUpdate(void *hSessionHandle,
+                               unsigned char *pucEncData, unsigned int uiEncDataLength,
+                               unsigned char *pucData, unsigned int *puiDataLength);
+SDF_API int SDF_DecryptFinal(void *hSessionHandle,
+                              unsigned char *pucData, unsigned int *puiDataLength);
+
+/* 流式 MAC */
+SDF_API int SDF_CalculateMACInit(void *hSessionHandle, void *hKeyHandle,
+                                  unsigned int uiAlgID, unsigned char *pucIV);
+SDF_API int SDF_CalculateMACUpdate(void *hSessionHandle,
+                                    unsigned char *pucData, unsigned int uiDataLength);
+SDF_API int SDF_CalculateMACFinal(void *hSessionHandle,
+                                   unsigned char *pucMAC, unsigned int *puiMACLength);
+
+/* 流式 AEAD */
+SDF_API int SDF_AuthEncInit(void *hSessionHandle, void *hKeyHandle,
+                             unsigned int uiAlgID,
+                             unsigned char *pucNonce, unsigned int uiNonceLen,
+                             unsigned char *pucAAD, unsigned int uiAADLen);
+SDF_API int SDF_AuthEncUpdate(void *hSessionHandle,
+                               unsigned char *pucData, unsigned int uiDataLength);
+SDF_API int SDF_AuthEncFinal(void *hSessionHandle,
+                              unsigned char *pucEncData, unsigned int *puiEncDataLength,
+                              unsigned char *pucTag, unsigned int *puiTagLength);
+
+SDF_API int SDF_AuthDecInit(void *hSessionHandle, void *hKeyHandle,
+                             unsigned int uiAlgID,
+                             unsigned char *pucNonce, unsigned int uiNonceLen,
+                             unsigned char *pucAAD, unsigned int uiAADLen,
+                             unsigned char *pucTag, unsigned int uiTagLen);
+SDF_API int SDF_AuthDecUpdate(void *hSessionHandle,
+                               unsigned char *pucEncData, unsigned int uiEncDataLength);
+SDF_API int SDF_AuthDecFinal(void *hSessionHandle,
+                              unsigned char *pucData, unsigned int *puiDataLength);
+
+/* 设备自检 */
+SDF_API int SDF_Test(void *hSessionHandle,
+                      unsigned char *pucData, unsigned int uiDataLength,
+                      unsigned char *pucTestResult, unsigned int *puiTestResultLength);
+
 #ifdef __cplusplus
 }
 #endif

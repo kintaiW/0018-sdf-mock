@@ -31,7 +31,7 @@ impl Default for DEVICEINFO {
             IssuerName: [0u8; 40],
             DeviceName: [0u8; 16],
             DeviceSerial: [0u8; 16],
-            DeviceVersion: 0x00010000,   // v1.0
+            DeviceVersion: 0x00020000,   // v2.0 (0.2.0)
             StandardVersion: 0x00020000, // GM/T 0018-2023
             AsymAlgAbility: [0x00000400, 0x00000400], // SM2
             SymAlgAbility: 0x00000400,   // SM4
@@ -74,6 +74,7 @@ impl Default for ECCrefPrivateKey {
 
 /// ECC 密文结构（GM/T 0018 §6.2.2.5）
 /// 对应 SM2 加密输出：C1（点坐标）‖ C3（SM3哈希）‖ C2（密文）
+/// BREAKING(0.2.0): C 数组长度由 136 改为 128，与真实 SDK ABI 对齐
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct ECCCipher {
@@ -85,13 +86,13 @@ pub struct ECCCipher {
     pub M: [u8; 32],
     /// C2 密文数据长度（字节）
     pub L: u32,
-    /// C2 密文数据（最大136字节）
-    pub C: [u8; 136],
+    /// C2 密文数据（最大128字节）
+    pub C: [u8; 128],
 }
 
 impl Default for ECCCipher {
     fn default() -> Self {
-        Self { x: [0u8; 64], y: [0u8; 64], M: [0u8; 32], L: 0, C: [0u8; 136] }
+        Self { x: [0u8; 64], y: [0u8; 64], M: [0u8; 32], L: 0, C: [0u8; 128] }
     }
 }
 
@@ -119,31 +120,104 @@ pub struct ECCrefExchangeData {
     pub z: [u8; 32],
 }
 
-/// 对称算法标识（GM/T 0018 §5.2）
+/// RSA 公钥结构（GM/T 0018 §6.2.2.3，对齐真实 SDK）
+#[repr(C)]
+#[derive(Debug, Clone)]
+pub struct RSArefPublicKey {
+    pub bits: u32,
+    /// 模数 n（256字节，大端右对齐）
+    pub m: [u8; 256],
+    /// 公钥指数 e（256字节，大端右对齐）
+    pub e: [u8; 256],
+}
+
+impl Default for RSArefPublicKey {
+    fn default() -> Self {
+        Self { bits: 2048, m: [0u8; 256], e: [0u8; 256] }
+    }
+}
+
+/// RSA 私钥结构（GM/T 0018 §6.2.2.3，对齐真实 SDK）
+#[repr(C)]
+#[derive(Debug, Clone)]
+pub struct RSArefPrivateKey {
+    pub bits: u32,
+    /// 模数 n
+    pub m: [u8; 256],
+    /// 公钥指数 e
+    pub e: [u8; 256],
+    /// 私钥指数 d
+    pub d: [u8; 256],
+    /// 素数 p, q（各128字节）
+    pub prime: [[u8; 128]; 2],
+    /// p, q 对应的指数（各128字节）
+    pub pexp: [[u8; 128]; 2],
+    /// 系数 CRT coef（128字节）
+    pub coef: [u8; 128],
+}
+
+impl Default for RSArefPrivateKey {
+    fn default() -> Self {
+        Self {
+            bits: 2048,
+            m: [0u8; 256],
+            e: [0u8; 256],
+            d: [0u8; 256],
+            prime: [[0u8; 128]; 2],
+            pexp: [[0u8; 128]; 2],
+            coef: [0u8; 128],
+        }
+    }
+}
+
+/// 算法标识常量（GM/T 0018 §5.2，数值严格对齐 sdf-sdk/sdf.h）
 pub mod alg_id {
-    pub const SGD_SM1_ECB: u32 = 0x00000101;
-    pub const SGD_SM1_CBC: u32 = 0x00000102;
-    pub const SGD_SM1_CFB: u32 = 0x00000104;
-    pub const SGD_SM1_OFB: u32 = 0x00000108;
-    pub const SGD_SM1_MAC: u32 = 0x00000110;
+    // 算法基础标识
+    pub const SGD_SM1: u32 = 0x00000100;
+    pub const SGD_SM4: u32 = 0x00000400;
+    pub const SGD_RSA: u32 = 65536;        // 0x00010000
+    pub const SGD_SM2: u32 = 0x00020100;   // SM2 通用标识（sign/verify/keygen）
+    pub const SGD_SM9: u32 = 262400;       // 0x00040100
 
-    pub const SGD_SM4_ECB: u32 = 0x00000401;
-    pub const SGD_SM4_CBC: u32 = 0x00000402;
-    pub const SGD_SM4_CFB: u32 = 0x00000404;
-    pub const SGD_SM4_OFB: u32 = 0x00000408;
-    pub const SGD_SM4_MAC: u32 = 0x00000410;
-    pub const SGD_SM4_CTR: u32 = 0x00000420;
-    // Reason: sdfc 标准 SGD_SM4_GCM = 0x00000480，0x00000440 为 XTS（本 Mock 不支持）
-    pub const SGD_SM4_GCM: u32 = 0x00000480;
-    pub const SGD_SM4_CCM: u32 = 0x00000440; // XTS 位置，保留常量避免编译错误
+    // 加密模式
+    pub const MODE_ECB: u32 = 1;
+    pub const MODE_CBC: u32 = 2;
+    pub const MODE_CFB: u32 = 4;
+    pub const MODE_OFB: u32 = 8;
+    pub const MODE_MAC: u32 = 16;
+    pub const MODE_CTR: u32 = 32;
+    pub const MODE_XTS: u32 = 64;
+    pub const MODE_GCM: u32 = 128;
 
+    // SM1 模式
+    pub const SGD_SM1_ECB: u32 = SGD_SM1 | MODE_ECB; // 0x00000101
+    pub const SGD_SM1_CBC: u32 = SGD_SM1 | MODE_CBC; // 0x00000102
+    pub const SGD_SM1_CFB: u32 = SGD_SM1 | MODE_CFB; // 0x00000104
+    pub const SGD_SM1_OFB: u32 = SGD_SM1 | MODE_OFB; // 0x00000108
+    pub const SGD_SM1_MAC: u32 = SGD_SM1 | MODE_MAC; // 0x00000110
+
+    // SM4 模式
+    pub const SGD_SM4_ECB: u32 = SGD_SM4 | MODE_ECB; // 0x00000401
+    pub const SGD_SM4_CBC: u32 = SGD_SM4 | MODE_CBC; // 0x00000402
+    pub const SGD_SM4_CFB: u32 = SGD_SM4 | MODE_CFB; // 0x00000404
+    pub const SGD_SM4_OFB: u32 = SGD_SM4 | MODE_OFB; // 0x00000408
+    pub const SGD_SM4_MAC: u32 = SGD_SM4 | MODE_MAC; // 0x00000410
+    pub const SGD_SM4_CTR: u32 = SGD_SM4 | MODE_CTR; // 0x00000420
+    pub const SGD_SM4_XTS: u32 = SGD_SM4 | MODE_XTS; // 0x00000440
+    // Reason: sdfc 标准 GCM=0x00000480，CCM 在真实 SDK 中沿用 XTS 位，此处保留别名
+    pub const SGD_SM4_GCM: u32 = SGD_SM4 | MODE_GCM; // 0x00000480
+    pub const SGD_SM4_CCM: u32 = SGD_SM4_XTS;         // 兼容旧代码
+
+    // SM2 子类型
     pub const SGD_SM2_1: u32 = 0x00020200; // SM2 签名
     pub const SGD_SM2_2: u32 = 0x00020400; // SM2 密钥交换
     pub const SGD_SM2_3: u32 = 0x00020800; // SM2 加密
-    // Reason: sdfc 用 SGD_SM2=0x00020100 统一表示 SM2 椭圆曲线算法（sign/verify/keygen均用此值）
-    pub const SGD_SM2: u32 = 0x00020100;   // SM2 通用标识（等同签名算法）
 
-    pub const SGD_SM3: u32 = 0x00000001;  // SM3 哈希
+    // 哈希算法标识
+    pub const SGD_SM3: u32 = 0x00000001;
     pub const SGD_SHA1: u32 = 0x00000002;
     pub const SGD_SHA256: u32 = 0x00000004;
+    pub const SGD_SHA512: u32 = 0x00000008;
+    pub const SGD_SHA384: u32 = 0x00000010;
+    pub const SGD_SHA224: u32 = 0x00000020;
 }
